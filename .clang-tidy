@@ -1,5 +1,5 @@
 ---
-Checks:          'clang-diagnostic-*,clang-analyzer-*,performance-*,readability-*,-readability-redundant-member-init,-readability-use-anyofallof,-readability-convert-member-functions-to-static,-readability-redundant-access-specifiers,bugprone-*,cert-*,boost-use-to-string,google-runtime-init,hicpp-exception-baseclass,hicpp-multiway-paths-covered,hicpp-signed-bitwise,misc-misplaced-const,misc-static-assert,misc-unused-using-decls'
+Checks:          'clang-diagnostic-*,-clang-diagnostic-c++17-extensions,clang-analyzer-*,performance-*,readability-*,-readability-redundant-member-init,-readability-use-anyofallof,-readability-convert-member-functions-to-static,-readability-redundant-access-specifiers,bugprone-*,cert-*,boost-use-to-string,google-runtime-init,hicpp-exception-baseclass,hicpp-multiway-paths-covered,hicpp-signed-bitwise,misc-misplaced-const,misc-static-assert,misc-unused-using-decls'
 WarningsAsErrors: ''
 HeaderFilterRegex: '.*'
 AnalyzeTemporaryDtors: false
