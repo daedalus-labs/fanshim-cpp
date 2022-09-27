@@ -20,7 +20,7 @@ C++ driver code for the fanshim on raspberry pi using `libgpiod`
 
 
 ## Build
- - If not installed: get the `libgpiod-dev` library
+ - If not installed: get the `libgpiod-dev` and `libspdlog-dev` `libfmt-dev` library
  - Put the `json.hpp` file from https://github.com/nlohmann/json/releases in the same folder as the source code, tested with `3.7.0`
  - Compile with `clang++ fanshim_driver.cpp -o fanshim_driver -O3 -std=c++17 -lstdc++fs -lgpiodcxx` (may also work with `g++`)
 
