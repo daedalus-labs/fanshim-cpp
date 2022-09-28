@@ -24,7 +24,8 @@ target_sources(
     PRIVATE
     src/fanshim/configuration.cpp
     src/fanshim/driver.cpp
-    src/fanshim/led.cpp
+    src/fanshim/gpio.cpp
+    src/fanshim/logger.cpp
 
     src/main.cpp
 )
