@@ -9,11 +9,11 @@
 
 inline constexpr std::string_view DEFAULT_CONFIGURATION_FILE = "/etc/fanshim.json";
 inline constexpr std::string_view DEFAULT_PROM_FILE = "/usr/local/etc/node_exp_txt/cpu_fan.prom";
-inline constexpr int32_t DEFAULT_ON_THRESHOLD = 60;
-inline constexpr int32_t DEFAULT_OFF_THRESHOLD = 50;
+inline constexpr uint8_t DEFAULT_ON_THRESHOLD = 60;
+inline constexpr uint8_t DEFAULT_OFF_THRESHOLD = 50;
 inline constexpr std::chrono::milliseconds DEFAULT_DELAY = std::chrono::milliseconds(10000);
 inline constexpr uint8_t DEFAULT_BRIGHTNESS = 0;
-inline constexpr int32_t DEFAULT_BREATH_BRIGHTNESS = 10;
+inline constexpr uint8_t DEFAULT_BREATH_BRIGHTNESS = 10;
 
 enum class BlinkType : uint8_t
 {
