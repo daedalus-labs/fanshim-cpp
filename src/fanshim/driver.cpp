@@ -1,279 +1,197 @@
-#include <gpiod.hpp>
-#include <json.hpp>
-#include <time.h>
+#include "fanshim/driver.hpp"
 
-#include <algorithm>
+#include "fanshim/context.hpp"
+#include "fanshim/gpio.hpp"
+#include "fanshim/logger.hpp"
+
+#include <uv.h>
+
+#include <chrono>
 #include <cmath>
-#include <csignal>
-#include <deque>
-#include <filesystem>
+#include <cstdint>
 #include <fstream>
-#include <iostream>
-#include <string>
-#include <vector>
+#include <functional>
+#include <string_view>
+#include <thread>
 
-using json = nlohmann::json;
+namespace args = std::placeholders;
 
-int br_counter = 0;
+inline constexpr std::string_view TEMPERATURE_FILE_PATH = "/sys/class/thermal/thermal_zone0/temp";
+inline constexpr std::string_view FAN_HEADER = "# HELP cpu_fanshim text file output: fan state.\n# TYPE cpu_fanshim gauge\ncpu_fanshim ";
+inline constexpr std::string_view TEMP_HEADER = "# HELP cpu_temp_fanshim text file output: temp.\n# TYPE cpu_temp_fanshim gauge\ncpu_temp_fanshim ";
+inline constexpr std::chrono::milliseconds READ_RATE = std::chrono::milliseconds(5000);
+inline constexpr std::chrono::milliseconds TICK_RATE = std::chrono::milliseconds(100);
+inline constexpr double DEFAULT_TEMPERATURE = 25.0;
 
-gpiod::chip rchip;
-gpiod::line ln_fan, ln_led_clk, ln_led_dat;
 
-// only for <1 sec
-int nano_usleep_frac(long msec)
+static double getCPUTemperature()
 {
-    struct timespec req;
-    req.tv_sec = 0;
-    req.tv_nsec = (long)(msec * 1000);
-    return nanosleep(&req, NULL);
-}
-
-
-//////////////////////////////////////////////////////////////////////////////////////////
-// https://github.com/pimoroni/fanshim-python/issues/19#issuecomment-517478717
-//////////////////////////////////////////////////////////////////////////////////////////
-inline static void write_byte(uint8_t byte)
-{
-    for (int n = 0; n < 8; n++) {
-        ln_led_dat.set_value((byte & (1 << (7 - n))) > 0);
-        ln_led_clk.set_value(HIGH);
-        // nano_usleep_frac(CLCK_STRETCH);
-        ln_led_clk.set_value(LOW);
-        // nano_usleep_frac(CLCK_STRETCH);
-    }
-}
-
-void set_led(double tmp, int br, int hi, int lo, bool off = false)
-{
-    int r = 0, g = 0, b = 0;
-
-    if (off) {
-        r = 0;
-        g = 0;
-        b = 190;
-    }
-    else if (br != 0) {
-        double s, v;
-        s = 1;
-        v = br / 31.0;
-        //// hsv: hue from temperature; s set to 1, v set to brightness like the official code
-        /// https://github.com/pimoroni/fanshim-python/blob/5841386d252a80eeac4155e596d75ef01f86b1cf/examples/automatic.py#L44
-
-        vector<int> rgb = hsv2rgb(tmp2hue(tmp, hi, lo), s, v);
-        r = rgb.at(0);
-        g = rgb.at(1);
-        b = rgb.at(2);
+    std::ifstream stream(TEMPERATURE_FILE_PATH.data(), std::ios::in);
+    if (!stream) {
+        logger().error("Failed to read CPU Temperature");
+        return DEFAULT_TEMPERATURE;
     }
 
-
-    // start frame
-    ln_led_dat.set_value(LOW);
-    for (int i = 0; i < 32; ++i) {
-        ln_led_clk.set_value(HIGH);
-        // nano_usleep_frac(CLCK_STRETCH);
-        ln_led_clk.set_value(LOW);
-        // nano_usleep_frac(CLCK_STRETCH);
-    }
-
-    // A 32 bit LED frame for each LED in the string (<0xE0+brightness> <blue> <green> <red>)
-    write_byte(0b11100000 | br); // in range of 0..31 for the fanshim
-    write_byte(b);               // b
-    write_byte(g);               // g
-    write_byte(r);               // r
-
-    // An end frame consisting of at least (n/2) bits of 1, where n is the number of LEDs in the string
-    ln_led_dat.set_value(HIGH);
-    for (int i = 0; i < 1; ++i) {
-        ln_led_clk.set_value(HIGH);
-        // nano_usleep_frac(CLCK_STRETCH);
-        ln_led_clk.set_value(LOW);
-        // nano_usleep_frac(CLCK_STRETCH);
-    }
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////
-
-void blk_led(double tmp, int br, int on_threshold, int off_threshold, int delay)
-{
-    struct timespec ti;
-    ti.tv_sec = 0;
-    ti.tv_nsec = 500 * 1000 * 1000;
-    for (int i = 1; i <= delay; i++) {
-        // set_led(tmp, ( (i % 2) * br ), on_threshold, off_threshold);
-        set_led(tmp, br, on_threshold, off_threshold);
-        nanosleep(&ti, NULL);
-        set_led(tmp, 0, on_threshold, off_threshold);
-        nanosleep(&ti, NULL);
-    }
-}
-
-void breath_led(double tmp, int brth, int on_threshold, int off_threshold, int delay, int *brs)
-{
-    struct timespec req;
-    req.tv_sec = 0;
-    req.tv_nsec = (long)(100 * 1000 * 1000);
-
-    for (int i = 0; i < 10 * delay; i++) {
-        // cout<<brs[br_counter]<<endl;
-        set_led(tmp, brs[br_counter], on_threshold, off_threshold);
-        if (br_counter >= 2 * brth - 1)
-            br_counter = 0;
-        else
-            br_counter++;
-        nanosleep(&req, NULL);
-    }
-}
-
-
-int main(void)
-{
-    signal(SIGINT, signalHandler);
-    gpiod::line_request lrq({"fanshim", gpiod::line_request::DIRECTION_OUTPUT, 0});
+    std::string contents;
+    std::getline(stream, contents);
+    stream.close();
 
     try {
-        const string chipname = "gpiochip0";
-
-        rchip = gpiod::chip(chipname, gpiod::chip::OPEN_BY_NAME);
-
-        ln_fan = rchip.get_line(fanshim_pin);
-        ln_fan.request(lrq, 0);
-
-        ln_led_dat = rchip.get_line(led_dat_pin);
-        ln_led_dat.request(lrq, 0);
-
-        ln_led_clk = rchip.get_line(led_clck_pin);
-        ln_led_clk.request(lrq, 0);
+        return std::stoi(contents) / 1000.0;
     }
-    catch (...) {
-        cout << "init error" << endl;
+    catch (const std::exception& ex) {
+        logger().error("Failed to convert CPU Temperature");
+        return DEFAULT_TEMPERATURE;
     }
-    cout << "fanshim init." << endl;
+}
 
+static double hsvk(int32_t n, double hue)
+{
+    return std::fmod(n + hue / 60.0, 6);
+}
 
-    map<string, int> fs_conf = get_fs_conf();
+static double hsvf(int n, double hue, double s, double v)
+{
+    double k = hsvk(n, hue);
+    return v - v * s * std::max({std::min({k, 4 - k, 1.0}), 0.0});
+}
 
+static RGB hsvToRGB(double h, double s, double v)
+{
+    double hue = h * 360;
+    RGB rgb;
+    rgb.red = static_cast<uint8_t>(hsvf(5, hue, s, v) * 255);
+    rgb.green = static_cast<uint8_t>(hsvf(3, hue, s, v) * 255);
+    rgb.blue = static_cast<uint8_t>(hsvf(1, hue, s, v) * 255);
+    return rgb;
+}
 
-    const int delay_sec = fs_conf["delay"];
-    const int on_threshold = fs_conf["on-threshold"];
-    const int off_threshold = fs_conf["off-threshold"];
-    const int budget = fs_conf["budget"];
-
-    const struct timespec sleep_delay
-    {
-        delay_sec, 0L
-    };
-
-    int read_fs_pin = 0;
-
-    const string node_hdr = "# HELP cpu_fanshim text file output: fan state.\n# TYPE cpu_fanshim gauge\ncpu_fanshim ";
-    const string node_hdr_t = "# HELP cpu_temp_fanshim text file output: temp.\n# TYPE cpu_temp_fanshim gauge\ncpu_temp_fanshim ";
-    string nodex_out = "";
-
-    fstream tmp_file;
-    float tmp = 0;
-    deque<int> tmp_q(budget, 0.0);
-    int j;
-    bool all_low, all_high;
-
-    tmp_file.open("/sys/class/thermal/thermal_zone0/temp", ios_base::in);
-
-
-    /// override file
-    filesystem::path override_fp("/usr/local/etc/.force_fanshim");
-
-
-    /// led
-    int br = fs_conf["brightness"];
-    int brt_br = fs_conf["breath_brgt"];
-    int *brs = new int[brt_br * 2];
-
-    for (int i = 0; i < brt_br * 2; i++) {
-        if (i <= brt_br)
-            brs[i] = i;
-        else
-            brs[i] = 2 * brt_br - i;
+static double temperatureToHue(double temperature, const Configuration& config)
+{
+    // Hue is expected to be the distance the temperature is from the onThreshold represented as a percentage normalized by 1/3.
+    static constexpr double NORMALIZATION_FACTOR = 0.333333;
+    if (temperature < config.offThreshold()) {
+        return NORMALIZATION_FACTOR;
     }
-
-
-    if (br > 31) {
-        br = 31;
-        cout << "brightness exceeds max = 31, set to max" << endl;
+    else if (temperature > config.onThreshold()) {
+        return 0.0;
     }
-    else if (br < 0) {
-        br = 0;
-        cout << "brightness lower than min = 0, set to 0" << endl;
+    else {
+        return ((config.onThreshold() - temperature) / (config.onThreshold() - config.offThreshold())) * NORMALIZATION_FACTOR;
     }
+}
 
+Driver::Driver(const Configuration& configuration)
+    : _event_loop(uv_default_loop()), _sigint_handle(), _temp_handle(), _tick_handle(), _config(configuration), _tick_count(0), _breath_values()
+{
+    uv_signal_init(_event_loop, &_sigint_handle);
+    uv_timer_init(_event_loop, &_tick_handle);
+    uv_timer_init(_event_loop, &_temp_handle);
 
-    if (br == 0) {
-        set_led(0, 0, on_threshold, off_threshold);
-    }
+    auto tick_callback = std::bind(&Driver::_onTick, this, args::_1);
+    Context::instance().setTickCallback(tick_callback);
 
+    auto temp_callback = std::bind(&Driver::_onReadTemperature, this, args::_1);
+    Context::instance().setTickCallback(temp_callback);
 
-    while (1) {
-        tmp_file >> tmp;
-        tmp_file.seekg(0, tmp_file.beg);
-        tmp = tmp / 1000;
-        tmp_q.push_back(int(tmp));
-        tmp_q.pop_front();
-        deque<int>(tmp_q).swap(tmp_q);
-
-        cout << "Temp: " << tmp << ", last " << budget << ": [ ";
-        for (j = 0; j < tmp_q.size(); j++) {
-            cout << tmp_q.at(j) << " ";
-        }
-        cout << "]\n";
-
-        all_low = all_of(tmp_q.begin(), tmp_q.end(), [=](int tx) { return tx < off_threshold; });
-        all_high = all_of(tmp_q.begin(), tmp_q.end(), [=](int tx) { return tx > on_threshold; });
-
-        cout << "all low: " << boolalpha << all_low << "; ";
-        cout << "all high: " << boolalpha << all_high << endl;
-
-        // override
-        if (filesystem::exists(override_fp)) {
-            all_high = true;
-            all_low = false;
-            cout << "forcing fan on: override effective." << endl;
-        }
-
-        read_fs_pin = ln_fan.get_value();
-
-        if (all_high && read_fs_pin == LOW) {
-            ln_fan.set_value(HIGH);
+    _breath_values.resize(_config.breathBrightness() * 2);
+    for (size_t i = 0; i < _config.breathBrightness() * 2; i++) {
+        if (i < _config.breathBrightness()) {
+            _breath_values[i] = i;
         }
         else {
-            if (all_low && read_fs_pin == HIGH) {
-                ln_fan.set_value(LOW);
-            }
-        }
-
-
-        read_fs_pin = ln_fan.get_value();
-        cout << "fan state now: " << (read_fs_pin == LOW ? "[off]" : "[on]") << endl;
-
-        ofstream nodex_fs;
-        nodex_fs.open("/usr/local/etc/node_exp_txt/cpu_fan.prom");
-        nodex_out = node_hdr + to_string(read_fs_pin) + "\n";
-        nodex_out += node_hdr_t + to_string(int(tmp)) + "\n";
-        nodex_fs << nodex_out;
-        nodex_fs.close();
-
-
-        /// set led
-        if (br != 0) {
-            if (fs_conf["blink"] != 0 && read_fs_pin == LOW) {
-                if (fs_conf["blink"] == 1)
-                    blk_led(tmp, br, on_threshold, off_threshold, delay_sec);
-                else if (fs_conf["blink"] == 2)
-                    breath_led(tmp, brt_br, on_threshold, off_threshold, delay_sec, brs);
-            }
-            else {
-                set_led(tmp, br, on_threshold, off_threshold);
-                nanosleep(&sleep_delay, NULL);
-            }
+            _breath_values[i] = 2 * _config.breathBrightness() - i;
         }
     }
+}
 
-    return 0;
+Driver::~Driver()
+{
+    // Ensure the GPIO is set back to where it needs to be
+    uv_timer_stop(&_tick_handle);
+    uv_timer_stop(&_temp_handle);
+    uv_signal_stop(&_sigint_handle);
+}
+
+int32_t Driver::run()
+{
+    uv_signal_cb signal_callback = [](uv_signal_t* handle, int32_t signal_number) {};
+    uv_timer_cb tick_callback = [](uv_timer_t* handle) { Context::instance().onTick(handle); };
+    uv_timer_cb temp_callback = [](uv_timer_t* handle) { Context::instance().onReadTemperature(handle); };
+
+    int32_t result = uv_signal_start(&_sigint_handle, signal_callback, SIGINT);
+    if (result) {
+        logger().error("Failed to start signal callback: {}", uv_strerror(result));
+    }
+
+    result = uv_timer_start(&_tick_handle, tick_callback, 0, TICK_RATE.count());
+    if (result) {
+        logger().error("Failed to start timer: {}", uv_strerror(result));
+    }
+
+    result = uv_timer_start(&_temp_handle, temp_callback, 0, _config.delay().count());
+    if (result) {
+        logger().error("Failed to start timer: {}", uv_strerror(result));
+    }
+    logger().warn("Fanshim Driver Started");
+
+    if (_config.blink() == BlinkType::NO_BLINK) {
+        GPIO::control().setBrightness(_config.brightness());
+    }
+
+    return uv_run(_event_loop, UV_RUN_DEFAULT);
+}
+
+void Driver::_blinkLED()
+{
+    _tick_count++;
+    if (_tick_count % 10 == 0) {
+        GPIO::control().setBrightness(OFF);
+    }
+    else if (_tick_count % 5 == 0) {
+        GPIO::control().setBrightness(_config.brightness());
+    }
+}
+
+void Driver::_breatheLED()
+{
+    GPIO::control().setBrightness(_breath_values[_tick_count % _breath_values.size()]);
+    _tick_count++;
+}
+
+void Driver::_onReadTemperature(uv_timer_t* handle)
+{
+    double current_temperature = getCPUTemperature();
+
+    if (current_temperature >= _config.onThreshold()) {
+        GPIO::control().setFan(true);
+    }
+    else if (current_temperature < _config.offThreshold()) {
+        GPIO::control().setFan(false);
+    }
+
+    std::ofstream prom_stream(_config.outputFile());
+    if (prom_stream.good()) {
+        prom_stream << FAN_HEADER << std::to_string(GPIO::control().getFan()) << std::endl;
+        prom_stream << TEMP_HEADER << std::to_string(static_cast<int32_t>(current_temperature)) << std::endl;
+        prom_stream.close();
+    }
+
+    logger().info("New CPU Temperature: {}, Fan State: {}", current_temperature, GPIO::control().getFan());
+}
+
+void Driver::_onSignal(uv_signal_t* handle, int32_t signal)
+{}
+
+void Driver::_onTick(uv_timer_t* handle)
+{
+    switch (_config.blink()) {
+    case BlinkType::BLINK:
+        _blinkLED();
+    case BlinkType::BREATHE:
+        _breatheLED();
+    case BlinkType::NO_BLINK:
+    default:
+        break;
+    }
 }

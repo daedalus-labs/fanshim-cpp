@@ -84,7 +84,7 @@
   KeepEmptyLinesAtTheStartOfBlocks: false
   MaxEmptyLinesToKeep: 2
   NamespaceIndentation: None
-  PointerAlignment: Right
+  PointerAlignment: Left
   ReflowComments: true
   SortIncludes: true
   SortUsingDeclarations: true
