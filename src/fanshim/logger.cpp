@@ -41,10 +41,8 @@ void logSignal(int32_t signum, siginfo_t* info, void* context)
     abort();
 }
 
-LoggingInterface::LoggingInterface() : _level(LogLevel::WARN)
+LoggingInterface::LoggingInterface() : _level(LogLevel::DEBUG)
 {
-    auto syslog_sink = spdlog::syslog_logger_mt(SYSLOG_LOGGER_NAME.data(), IDENTIFIER.data(), LOG_PID);
-
     char* level = getenv(LOG_LEVEL_ENVIRONMENT_VARIABLE.data());
     if (level) {
         try {
@@ -66,10 +64,12 @@ LoggingInterface::LoggingInterface() : _level(LogLevel::WARN)
         sigaction(signal, &action, NULL);
     }
 
-    spdlog::set_default_logger(syslog_sink);
     spdlog::set_pattern(LOG_PATTERN.data(), spdlog::pattern_time_type::local);
     spdlog::set_level(static_cast<spdlog::level::level_enum>(_level));
     spdlog::flush_every(FLUSH_INTERVAL);
+
+    auto syslog_sink = spdlog::syslog_logger_mt(SYSLOG_LOGGER_NAME.data(), IDENTIFIER.data(), LOG_PID);
+    spdlog::set_default_logger(syslog_sink);
 }
 
 void LoggingInterface::flush()
