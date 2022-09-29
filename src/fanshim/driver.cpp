@@ -136,7 +136,7 @@ int32_t Driver::run()
     logger().warn("Fanshim Driver Started");
 
     if (_config.blink() == BlinkType::NO_BLINK) {
-        GPIO::control().setBrightness(_config.brightness());
+        gpio().setBrightness(_config.brightness());
     }
 
     return uv_run(_event_loop, UV_RUN_DEFAULT);
@@ -146,38 +146,42 @@ void Driver::_blinkLED()
 {
     _tick_count++;
     if (_tick_count % 10 == 0) {
-        GPIO::control().setBrightness(OFF);
+        gpio().setBrightness(OFF);
     }
     else if (_tick_count % 5 == 0) {
-        GPIO::control().setBrightness(_config.brightness());
+        gpio().setBrightness(_config.brightness());
     }
 }
 
 void Driver::_breatheLED()
 {
-    GPIO::control().setBrightness(_breath_values[_tick_count % _breath_values.size()]);
+    gpio().setBrightness(_breath_values[_tick_count % _breath_values.size()]);
     _tick_count++;
 }
 
 void Driver::_onReadTemperature(uv_timer_t* handle)
 {
+    std::error_code ec;
     double current_temperature = getCPUTemperature();
 
     if (current_temperature >= _config.onThreshold()) {
-        GPIO::control().setFan(true);
+        gpio().setFan(true);
     }
     else if (current_temperature < _config.offThreshold()) {
-        GPIO::control().setFan(false);
+        gpio().setFan(false);
+    }
+    else if (std::filesystem::exists(_config.forceFile(), ec)) {
+        gpio().setFan(true);
     }
 
     std::ofstream prom_stream(_config.outputFile());
     if (prom_stream.good()) {
-        prom_stream << FAN_HEADER << std::to_string(GPIO::control().getFan()) << std::endl;
+        prom_stream << FAN_HEADER << std::to_string(gpio().getFan()) << std::endl;
         prom_stream << TEMP_HEADER << std::to_string(static_cast<int32_t>(current_temperature)) << std::endl;
         prom_stream.close();
     }
 
-    logger().info("New CPU Temperature: {}, Fan State: {}", current_temperature, GPIO::control().getFan());
+    logger().info("New CPU Temperature: {}, Fan State: {}", current_temperature, gpio().getFan());
 }
 
 void Driver::_onSignal(uv_signal_t* handle, int32_t signal)

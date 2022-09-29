@@ -1,5 +1,6 @@
 #include "fanshim/configuration.hpp"
 
+#include "fanshim/gpio.hpp"
 #include "fanshim/logger.hpp"
 
 #include <nlohmann/json.hpp>
@@ -34,7 +35,7 @@ static bool isValid(const json& configuration)
     //      5. If it contains Blink, Blink must be an unsigned integer.
     //          a. Blink must be a valid BlinkType.
     //      6. If it contains Breath Brightness, Breath Brightness must be an unsigned integer.
-    //          a. Breath Brightness must be less than 31
+    //          a. Breath Brightness must be less than MAX_BRIGHTNESS
     //      7. If it contains Output File, Output File must be a string.
 
     if (configuration.empty()) {
@@ -67,7 +68,7 @@ static bool isValid(const json& configuration)
     }
 
     if (configuration.contains(BREATH_BRIGHTNESS)) {
-        if (!configuration[BREATH_BRIGHTNESS].is_number() || configuration[BLINK].get<uint8_t>() > 31) {
+        if (!configuration[BREATH_BRIGHTNESS].is_number() || configuration[BLINK].get<uint8_t>() > MAX_BRIGHTNESS) {
             return false;
         }
     }

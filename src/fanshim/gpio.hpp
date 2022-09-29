@@ -1,10 +1,14 @@
 #pragma once
 
+#include <gpiod.hpp>
+
 #include <cstdint>
+
 
 inline constexpr uint8_t LOW = 0;
 inline constexpr uint8_t HIGH = 1;
 inline constexpr uint8_t OFF = 0;
+inline constexpr uint8_t MAX_BRIGHTNESS = 31;
 
 struct RGB
 {
@@ -13,19 +17,48 @@ struct RGB
     uint8_t blue;
 };
 
-class GPIO
+class GPIOInterface
 {
 public:
-    static GPIO& control();
+    GPIOInterface();
 
     uint8_t getBrightness() const;
     bool getFan() const;
     const RGB& getRGB() const;
 
     bool setBrightness(uint8_t brightness);
-    bool setFan(bool on);
+    bool setFan(bool desired);
     bool setLED(const RGB& rgb);
 
 private:
-    GPIO();
+    void _endFrame();
+    void _refreshLED();
+    void _startFrame();
+    void _writeByteToLED(uint8_t value);
+
+    gpiod::chip _chip;
+    gpiod::line _fan;
+    gpiod::line _led_clk;
+    gpiod::line _led_data;
+    RGB _rgb;
+    uint8_t _brightness;
 };
+
+class GPIOContext
+{
+public:
+    static GPIOContext& instance();
+
+    GPIOInterface& gpio();
+
+private:
+    GPIOContext();
+    ~GPIOContext();
+
+    GPIOInterface _gpio;
+};
+
+inline GPIOInterface& gpio()
+{
+    return GPIOContext::instance().gpio();
+}
