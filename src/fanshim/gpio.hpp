@@ -21,22 +21,26 @@ class GPIOInterface
 {
 public:
     GPIOInterface();
+    ~GPIOInterface();
 
     uint8_t getBrightness() const;
+    bool getButton() const;
     bool getFan() const;
     const RGB& getRGB() const;
 
-    bool setBrightness(uint8_t brightness);
-    bool setFan(bool desired);
-    bool setLED(const RGB& rgb);
+    void setBrightness(uint8_t brightness);
+    void setFan(bool desired);
+    void setLED(const RGB& rgb);
 
 private:
     void _endFrame();
     void _refreshLED();
     void _startFrame();
+    void _writeBitToLED(uint8_t value);
     void _writeByteToLED(uint8_t value);
 
     gpiod::chip _chip;
+    gpiod::line _button;
     gpiod::line _fan;
     gpiod::line _led_clk;
     gpiod::line _led_data;

@@ -29,7 +29,7 @@ void logSignal(int32_t signum, siginfo_t* info, void* context)
     if (symbol_count > 0) {
         char** symbols = backtrace_symbols(buffer, symbol_count);
         if (symbols) {
-            for (size_t i = 0; i < symbol_count; i++) {
+            for (int32_t i = 0; i < symbol_count; i++) {
                 spdlog::critical(symbols[i]);
             }
             free(symbols);

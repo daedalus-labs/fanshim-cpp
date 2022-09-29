@@ -75,8 +75,15 @@
         "GPIO",
         "gpiochip",
         "gpiod",
+        "grafana",
         "hsvf",
         "hsvk",
-        "spdlog"
+        "LEDS",
+        "libgpiod",
+        "libspdlog",
+        "libuv",
+        "Pimoroni",
+        "spdlog",
+        "toolchains"
     ]
 }
