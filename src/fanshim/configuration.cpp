@@ -1,5 +1,6 @@
 #include "fanshim/configuration.hpp"
 
+#include "fanshim/gpio.hpp"
 #include "fanshim/logger.hpp"
 
 #include <nlohmann/json.hpp>
@@ -20,6 +21,7 @@ inline constexpr std::string_view BRIGHTNESS = "brightness";
 inline constexpr std::string_view BLINK = "blink";
 inline constexpr std::string_view BREATH_BRIGHTNESS = "breath-brightness";
 inline constexpr std::string_view OUTPUT_FILE = "output-file";
+inline constexpr std::string_view FORCE_FILE = "force-file";
 
 
 static bool isValid(const json& configuration)
@@ -34,8 +36,9 @@ static bool isValid(const json& configuration)
     //      5. If it contains Blink, Blink must be an unsigned integer.
     //          a. Blink must be a valid BlinkType.
     //      6. If it contains Breath Brightness, Breath Brightness must be an unsigned integer.
-    //          a. Breath Brightness must be less than 31
+    //          a. Breath Brightness must be less than MAX_BRIGHTNESS
     //      7. If it contains Output File, Output File must be a string.
+    //      8. If it contains Force File, Force File must be a string.
 
     if (configuration.empty()) {
         return false;
@@ -67,13 +70,19 @@ static bool isValid(const json& configuration)
     }
 
     if (configuration.contains(BREATH_BRIGHTNESS)) {
-        if (!configuration[BREATH_BRIGHTNESS].is_number() || configuration[BLINK].get<uint8_t>() > 31) {
+        if (!configuration[BREATH_BRIGHTNESS].is_number() || configuration[BLINK].get<uint8_t>() > MAX_BRIGHTNESS) {
             return false;
         }
     }
 
     if (configuration.contains(OUTPUT_FILE)) {
         if (!configuration[OUTPUT_FILE].is_string()) {
+            return false;
+        }
+    }
+
+    if (configuration.contains(FORCE_FILE)) {
+        if (!configuration[FORCE_FILE].is_string()) {
             return false;
         }
     }
@@ -91,7 +100,8 @@ Configuration::Configuration(const std::filesystem::path& configuration_file)
       _brightness(DEFAULT_BRIGHTNESS),
       _blink(BlinkType::NO_BLINK),
       _breath_brightness(DEFAULT_BREATH_BRIGHTNESS),
-      _output_file(DEFAULT_PROM_FILE)
+      _force_file(DEFAULT_PROM_FILE),
+      _output_file(DEFAULT_FORCE_FILE)
 {
     _load(configuration_file);
 }
@@ -124,6 +134,11 @@ BlinkType Configuration::blink() const
 uint8_t Configuration::breathBrightness() const
 {
     return _breath_brightness;
+}
+
+const std::filesystem::path& Configuration::forceFile() const
+{
+    return _force_file;
 }
 
 const std::filesystem::path& Configuration::outputFile() const
@@ -171,5 +186,9 @@ void Configuration::_load(const std::filesystem::path& configuration_file)
 
     if (config.contains(OUTPUT_FILE)) {
         _output_file = std::filesystem::path(config[OUTPUT_FILE].get<std::string>());
+    }
+
+    if (config.contains(FORCE_FILE)) {
+        _force_file = std::filesystem::path(config[FORCE_FILE].get<std::string>());
     }
 }

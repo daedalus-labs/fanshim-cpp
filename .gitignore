@@ -45,7 +45,6 @@ _deps
 *.out
 *.app
 
-##### IDEs
-# Visual Studio Code
-*.code-workspace
+
+# Build Directories and Artifacts
 build/*
