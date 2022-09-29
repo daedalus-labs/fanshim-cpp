@@ -18,22 +18,22 @@ public:
 
     void onButtonCheck(uv_timer_t* handle)
     {
-        return _button_callback(handle);
+        _button_callback(handle);
     }
 
     void onOverrideCheck(uv_timer_t* handle)
     {
-        return _override_callback(handle);
+        _override_callback(handle);
     }
 
     void onReadTemperature(uv_timer_t* handle)
     {
-        return _read_temperature_callback(handle);
+        _read_temperature_callback(handle);
     }
 
     void onTick(uv_timer_t* handle)
     {
-        return _tick_callback(handle);
+        _tick_callback(handle);
     }
 
     void setButtonCallback(TimerCallback callback)

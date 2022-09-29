@@ -105,7 +105,7 @@ Driver::Driver(const Configuration& configuration)
     Context::instance().setTickCallback(tick_callback);
 
     auto temp_callback = std::bind(&Driver::_onReadTemperature, this, args::_1);
-    Context::instance().setTickCallback(temp_callback);
+    Context::instance().setReadTemperatureCallback(temp_callback);
 
     auto override_callback = std::bind(&Driver::_onCheckOverride, this, args::_1);
     Context::instance().setOverrideCallback(override_callback);
