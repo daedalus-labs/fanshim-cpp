@@ -1,0 +1,10 @@
+[Unit]
+Description=Pimoroni Fanshim Driver
+
+[Service]
+ExecStart=@CMAKE_INSTALL_PREFIX@/bin/@PROJECT_NAME@
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

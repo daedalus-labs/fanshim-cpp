@@ -8,6 +8,7 @@
 #include <string_view>
 
 inline constexpr std::string_view DEFAULT_CONFIGURATION_FILE = "/etc/fanshim.json";
+inline constexpr std::string_view DEFAULT_FORCE_FILE = "/usr/local/etc/.force_fanshim";
 inline constexpr std::string_view DEFAULT_PROM_FILE = "/usr/local/etc/node_exp_txt/cpu_fan.prom";
 inline constexpr uint8_t DEFAULT_ON_THRESHOLD = 60;
 inline constexpr uint8_t DEFAULT_OFF_THRESHOLD = 50;
@@ -34,6 +35,7 @@ public:
     uint8_t brightness() const;
     BlinkType blink() const;
     uint8_t breathBrightness() const;
+    const std::filesystem::path& forceFile() const;
     const std::filesystem::path& outputFile() const;
 
 private:
@@ -45,5 +47,6 @@ private:
     uint8_t _brightness;
     BlinkType _blink;
     uint8_t _breath_brightness;
+    std::filesystem::path _force_file;
     std::filesystem::path _output_file;
 };

@@ -1,82 +1,135 @@
-# fanshim-cpp
+# Fan SHIM C++ Driver
 
-[![Build Status](https://travis-ci.com/daviehh/fanshim-cpp.svg?branch=master)](https://travis-ci.com/daviehh/fanshim-cpp)
+This project is a C++-based driver for the [Pimoroni Fan SHIM](https://shop.pimoroni.com/products/fan-shim).
 
-C++ driver code for the fanshim on raspberry pi using `libgpiod`
+The driver has the following dependencies:
 
-[pimoroni link](https://shop.pimoroni.com/products/fan-shim)
-
-**Warning/disclaimer:**
-
-**very experimental code, for testing purposes only.**
-
-**[may not work at any time or even cause hardware damage (e.g. from causing the fan to be constantly running)].**
-
-**Only proceed if you know what the code is doing.**
-
-## Credits
- - official fanshim controller code https://github.com/pimoroni/fanshim-python
- - nlohmann/json https://github.com/nlohmann/json/ 
-
+| Library                                                            | Minimum Version |
+| ------------------------------------------------------------------ | --------------- |
+| [`libgpiod`](https://libgpiod.readthedocs.io/en/latest/index.html) | 1.6.3           |
+| [`libuv`](https://libuv.org/)                                      | 1.43.0          |
+| [`libspdlog`](https://github.com/gabime/spdlog/wiki)               | 1.9.2           |
 
 ## Build
- - If not installed: get the `libgpiod-dev` and `libspdlog-dev` `libfmt-dev` library
- - Put the `json.hpp` file from https://github.com/nlohmann/json/releases in the same folder as the source code, tested with `3.7.0`
- - Compile with `clang++ fanshim_driver.cpp -o fanshim_driver -O3 -std=c++17 -lstdc++fs -lgpiodcxx` (may also work with `g++`)
 
+Both GNU and Clang toolchains have been tested, it is recommended that the `CC` and `CXX` environment variables are used to set the desired compiler. For example, to use the Clang toolchain
+run the following before using `cmake`:
 
- ## Example systemd service file
- Change `/path/to/compiled/binary` to the compiled binary path.
- 
- ```
- [Unit]
-Description=Fanshim C++ driver
+```bash
+export CC=/usr/bin/clang
+export CXX=/usr/bin/clang++
+```
 
-[Service]
-ExecStart=/path/to/compiled/binary
-Restart=always
-RestartSec=5
+To install this driver, the it is recommended to use `install.sh`, as it will configure and install the driver as a systemd service:
 
-[Install]
-WantedBy=multi-user.target
+```bash
+./install.sh
+```
 
- ```
- 
- ## Configuration
- 
- The configuration file is in `/usr/local/etc/fanshim.json`, example:
+### Developer loop
+
+If you are a developer and wish to make modifications and test, using `cmake` commands as follows will allow you to build and test:
+
+```bash
+cmake -S . -B build
+cmake --build build
+```
+
+### Installation
+
+The driver can be installed with a systemd service (`fanshim-driver`) using the `instal.sh` script or the `--install` flag to cmake:
+
+```bash
+cmake --install build
+```
+
+The `install.sh` script will enable the service automatically.
+
+## Driver Configuration
+
+ The behavior of the driver can be driven by a configuration file located at `/etc/fanshim.json`. This file is read in at runtime. If any value is invalid, the entire
+ configuration will revert to default.
+
+ All fields in the configuration file are optional, except `on-threshold` and `off-threshold` which must be specified as a pair.
+
+ The JSON file supports the following configuration items:
+
+ | Configuration Item  | Type    | Description                                                        | Valid Values                                                 |
+ | ------------------- | ------- | ------------------------------------------------------------------ | ------------------------------------------------------------ |
+ | `on-threshold`      | Integer | Sets the temperature, in degrees celsius, for turning the fan ON.  | Value must be greater than 0                                 |
+ | `off-threshold`     | Integer | Sets the temperature, in degrees celsius, for turning the fan OFF. | Value must be greater than 0, less than `on-threshold` value |
+ | `delay`             | Integer | The time, in seconds, between checking the CPU temperature.        | Value must be greater than 0                                 |
+ | `brightness`        | Integer | The brightness of the LED.                                         | Value must be greater than 0, less than 31                   |
+ | `breath-brightness` | Integer | The max brightness to use when "breathing" the LED.                | Value must be greater than 0, less than 31                   |
+ | `blink`             | Integer | The type of LED blink behavior.                                    | Value must in [0, 1, 2]                                      |
+ | `output-file`       | string  | The file to which to write monitoring output.                      | Any string is accepted                                       |
+ | `force-file`        | string  | The file to check for fan override behavior.                       | Any string is accepted                                       |
+
+An example of a valid configuration file:
+
  ```json
  {
-    "on-threshold": 60,
-    "off-threshold": 50,
-    "delay": 10
+    "on-threshold": 65,
+    "off-threshold": 45,
+    "delay": 7,
+    "blink": 1,
+    "output-file": "/home/pi/fanshim.prom"
 }
  ```
- 
-Will use the value in the file to override the defaults, no need to specify all keys, just the ones you want to change. Keys used:
- 
- - `on-threshold`/`off-threshold`: temperature, in Celsius, the threshold for turing on (off) the fan. Default to 60 and 50 respectively.
- 
- - `delay`: in seconds, the program will wait this amount of time before checking the temperature again. Default to 10.
- 
- - `budget`: an  integer n, the program will only turn on/off the fan if the temperature is consecutively above (below) the on (off) threshold for the last n temperature measurements. Defaults to 3.
 
-- `brightness`: an integer from 0 to 31, LED brightness, 0 means no LED (default).
+### Default Values
 
--  `blink`: an integer in [0, 1 , 2], where 
-   - 0: no blink (default); 
-   - 1: the LED will blink when the fan is not spinning; 
-   - 2: the LED will "breath" when the fan is not spinning, the max brightness in this mode is `breath_brgt` (default 10).
+If the configuration file is not present or is invalid, the following values will be used:
 
+ | Configuration Item  | Default Value                              |
+ | ------------------- | ------------------------------------------ |
+ | `on-threshold`      | 60                                         |
+ | `off-threshold`     | 50                                         |
+ | `delay`             | 10                                         |
+ | `brightness`        | 0                                          |
+ | `breath-brightness` | 10                                         |
+ | `blink`             | 0                                          |
+ | `output-file`       | `/usr/local/etc/node_exp_txt/cpu_fan.prom` |
+ | `force-file`        | `/usr/local/etc/.force_fanshim`            |
 
-## Notes/todo
+### LED Behavior
 
- - No button support (I think given the small size of the button, it'll be easier to force the fan on/off through software based on e.g. whether a certain file exists. Currently, the file is hard-coded as `/usr/local/etc/.force_fanshim`: fan will be on if this file exists)
+ | `blink` value | LED Behavior                           |
+ | ------------- | -------------------------------------- |
+ | 0             | LED will not blink                     |
+ | 1             | LED will blink when fan is OFF         |
+ | 2             | LED will "breathe" when the fan is OFF |
 
+### Overriding Behavior
 
+There are two ways to force the fan on:
 
-## Additional features
- 
- - Will output current status to the file `/usr/local/etc/node_exp_txt/cpu_fan.prom` so that it can be used with external programs to monitor, e.g. node_exporter + prometheus + grafana:
- 
- ![screen](https://raw.githubusercontent.com/daviehh/fanshim-cpp/master/rpi_monit_eg.png)
+* The driver will periodically check for the existence of the `force-file`. If it exists, the driver will drive the fan ON until it no longer exists or the CPU temperature
+  is below the `off-threshold`, whichever occurs last.
+* If the driver is not driving the fan ON due to the `force-file` or CPU temperature, the button on the FanSHIM will enable the fan for as long as it is pressed.
+
+## Logging and Monitoring
+
+The driver logs to `syslog` by default. If the driver is not behaving as you expect, please check the logs via the following command:
+
+```bash
+cat /var/log/syslog | grep fanshim
+```
+
+### Monitoring
+
+This driver will output current status to the file (`/usr/local/etc/node_exp_txt/cpu_fan.prom` by default) so that it can be used with external programs to monitor. This file is overwritten
+periodically with the current state of the FAN in the format:
+
+```text
+# HELP cpu_fanshim text file output: fan state.
+# TYPE cpu_fanshim gauge
+cpu_fanshim [TRUE|FALSE]
+# HELP cpu_temp_fanshim text file output: temp.
+# TYPE cpu_temp_fanshim gauge
+cpu_temp_fanshim [Temperature in degrees celsius]
+```
+
+An example using node_exporter, prometheus, grafana:
+
+ ![screen](./docs/rpi_monit_eg.png)
