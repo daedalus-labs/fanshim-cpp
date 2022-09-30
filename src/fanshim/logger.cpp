@@ -15,7 +15,7 @@
 
 inline constexpr std::string_view IDENTIFIER = "fanshim";
 inline constexpr std::string_view SYSLOG_LOGGER_NAME = "syslog";
-inline constexpr std::string_view LOG_PATTERN = "[%Y.%m.%d %H:%M:%S.%e]%^(%L)%$: %v";
+inline constexpr std::string_view LOG_PATTERN = "[%Y.%m.%d %H:%M:%S.%e] (%L): %v";
 inline constexpr std::string_view LOG_LEVEL_ENVIRONMENT_VARIABLE = "SHIM_LOG_LEVEL";
 inline constexpr size_t BACKTRACE_SIZE = 4;
 
@@ -69,6 +69,7 @@ LoggingInterface::LoggingInterface() : _level(LogLevel::DEBUG)
     spdlog::flush_every(FLUSH_INTERVAL);
 
     auto syslog_sink = spdlog::syslog_logger_mt(SYSLOG_LOGGER_NAME.data(), IDENTIFIER.data(), LOG_PID);
+    syslog_sink->set_pattern(LOG_PATTERN.data(), spdlog::pattern_time_type::local);
     spdlog::set_default_logger(syslog_sink);
 }
 
