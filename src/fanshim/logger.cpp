@@ -41,7 +41,7 @@ void logSignal(int32_t signum, siginfo_t* info, void* context)
     abort();
 }
 
-LoggingInterface::LoggingInterface() : _level(LogLevel::DEBUG)
+LoggingInterface::LoggingInterface() : _level(LogLevel::WARN)
 {
     char* level = getenv(LOG_LEVEL_ENVIRONMENT_VARIABLE.data());
     if (level) {
