@@ -9,6 +9,9 @@ The driver has the following dependencies:
 | [`libgpiod`](https://libgpiod.readthedocs.io/en/latest/index.html) | 1.6.3           |
 | [`libuv`](https://libuv.org/)                                      | 1.43.0          |
 | [`libspdlog`](https://github.com/gabime/spdlog/wiki)               | 1.9.2           |
+| ['json'](https://github.com/nlohmann/json)                         | 3.11.2          |
+
+The `install-dependencies.sh` script will install the requisite dependencies on Debian-based systems.
 
 ## Build
 
