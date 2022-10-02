@@ -46,7 +46,7 @@ int main(int argc, char** argv)
 
     Configuration config;
 
-    logger().warn("Driver configuration loaded:\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}\n{}: {}",
+    logger().warn("Driver configuration loaded:[{}: {}, {}: {}, {}: {}, {}: {}, {}: {}, {}: {}, {}: {}, {}: {}]",
                   "On Threshold",
                   config.onThreshold(),
                   "Off Threshold",
