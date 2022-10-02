@@ -97,11 +97,11 @@ void GPIOInterface::setFan(bool desired)
     }
 
     if (desired) {
-        logger().info("Turning on fan");
+        logger().warn("Turning on fan");
         _fan.set_value(HIGH);
     }
     else {
-        logger().info("Turning off fan");
+        logger().warn("Turning off fan");
         _fan.set_value(LOW);
     }
 }
