@@ -45,6 +45,25 @@ int main(int argc, char** argv)
     uv_signal_start(&sigint, onSignalReceived, SIGINT);
 
     Configuration config;
+
+    logger().warn("Driver configuration loaded:[{}: {}, {}: {}, {}: {}, {}: {}, {}: {}, {}: {}, {}: {}, {}: {}]",
+                  "On Threshold",
+                  config.onThreshold(),
+                  "Off Threshold",
+                  config.offThreshold(),
+                  "Check Delay",
+                  config.delay().count(),
+                  "LED Behavior",
+                  static_cast<uint8_t>(config.blink()),
+                  "LED Brightness",
+                  config.brightness(),
+                  "Breath Brightness",
+                  config.breathBrightness(),
+                  "Output File",
+                  config.outputFile().native(),
+                  "Force File",
+                  config.forceFile().native());
+
     Driver driver(config);
 
     driver.run();
