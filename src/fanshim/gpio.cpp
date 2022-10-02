@@ -81,7 +81,6 @@ const RGB& GPIOInterface::getRGB() const
 void GPIOInterface::setBrightness(uint8_t brightness)
 {
     if (brightness > MAX_BRIGHTNESS) {
-        logger().error("Unable to update brightness, {} is too large", brightness);
         return;
     }
 
@@ -91,17 +90,10 @@ void GPIOInterface::setBrightness(uint8_t brightness)
 
 void GPIOInterface::setFan(bool desired)
 {
-    if (getFan() == desired) {
-        logger().debug("Fan already in desired stated");
-        return;
-    }
-
     if (desired) {
-        logger().warn("Turning on fan");
         _fan.set_value(HIGH);
     }
     else {
-        logger().warn("Turning off fan");
         _fan.set_value(LOW);
     }
 }
