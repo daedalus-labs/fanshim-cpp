@@ -2,7 +2,7 @@
 
 #include <execinfo.h>
 #include <signal.h>
-#include <spdlog/sinks/syslog_sink.h>
+#include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/spdlog.h>
 #include <unistd.h>
 
@@ -14,10 +14,12 @@
 
 
 inline constexpr std::string_view IDENTIFIER = "fanshim";
-inline constexpr std::string_view SYSLOG_LOGGER_NAME = "syslog";
+inline constexpr std::string_view LOG_FILE = "/var/log/devices/fanshim.log";
 inline constexpr std::string_view LOG_PATTERN = "[%Y.%m.%d %H:%M:%S.%e] (%L): %v";
 inline constexpr std::string_view LOG_LEVEL_ENVIRONMENT_VARIABLE = "SHIM_LOG_LEVEL";
 inline constexpr size_t BACKTRACE_SIZE = 4;
+inline constexpr size_t FILE_SIZE_MB = 1 * 1024 * 1024;
+inline constexpr size_t MAX_LOG_FILES = 3;
 
 
 void logSignal(int32_t signum, siginfo_t* info, void* context)
@@ -64,13 +66,22 @@ LoggingInterface::LoggingInterface() : _level(LogLevel::WARN)
         sigaction(signal, &action, NULL);
     }
 
+    std::shared_ptr<spdlog::logger> logger;
+
+    try {
+        auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(LOG_FILE.data(), FILE_SIZE_MB, MAX_LOG_FILES);
+        spdlog::sinks_init_list sinks = {file_sink};
+        logger = std::make_shared<spdlog::logger>(IDENTIFIER.data(), sinks);
+    }
+    catch (const spdlog::spdlog_ex& ex) {
+        fprintf(stderr, "Log to file failed: %s\n", ex.what());
+        abort();
+    }
+
+    spdlog::set_default_logger(logger);
     spdlog::set_pattern(LOG_PATTERN.data(), spdlog::pattern_time_type::local);
     spdlog::set_level(static_cast<spdlog::level::level_enum>(_level));
     spdlog::flush_every(FLUSH_INTERVAL);
-
-    auto syslog_sink = spdlog::syslog_logger_mt(SYSLOG_LOGGER_NAME.data(), IDENTIFIER.data(), LOG_PID);
-    syslog_sink->set_pattern(LOG_PATTERN.data(), spdlog::pattern_time_type::local);
-    spdlog::set_default_logger(syslog_sink);
 }
 
 void LoggingInterface::flush()
